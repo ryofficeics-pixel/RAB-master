@@ -1,0 +1,269 @@
+RAB MASTER — RAB, PROJECT CONTROL & GOOGLE SHEETS SYNC
+
+Simple. Functional. Robust. Reliable.
+
+1. About This Project
+
+RAB Master adalah sistem pengelolaan anggaran dan pengendalian pekerjaan proyek konstruksi berbasis Google Sheets.
+
+Sistem ini mengintegrasikan:
+
+- RAB (Rencana Anggaran Biaya).
+- Pembagian pekerjaan dan pelaksana.
+- Produktivitas dan realisasi harian.
+- Time Schedule.
+- Rencana kerja mingguan.
+- Monitoring progres dan keterlambatan.
+- Perhitungan nilai pekerjaan dan ongkos tenaga kerja.
+- Rekap perubahan pekerjaan (tambah, kurang, batal, pending, dan VO).
+- Termin dan tagihan proyek.
+
+Sistem menggunakan dua spreadsheet yang saling terhubung melalui Google Apps Script.
+
+Tujuan utamanya adalah menyediakan satu alur kerja yang sederhana: data pekerjaan dikelola oleh tim, progres diperbarui secara berkala, dan manajemen dapat memantau realisasi pekerjaan serta kondisi anggaran melalui file ADMIN.
+
+2. System Architecture
+
+Sistem terdiri dari dua Google Sheets dengan fungsi berbeda.
+
+A. STAFF — Operational Project Control
+
+Digunakan oleh tim operasional untuk mengelola dan memperbarui data pekerjaan di lapangan.
+
+Fitur utama:
+
+Sheet| Fungsi
+RAB UPDATE| Referensi daftar pekerjaan, volume, satuan, dan bobot pekerjaan
+BOBOT PEK| Pembagian pekerjaan, pelaksana, jadwal, status, dan distribusi bobot
+PRODUKTIVITAS HARIAN| Input realisasi volume pekerjaan setiap hari
+TS| Time Schedule dan visualisasi rencana pekerjaan
+RENCANA MINGGUAN| Rencana target pekerjaan mingguan dan target harian
+ITEM TERLAMBAT| Monitoring pekerjaan yang progresnya tertinggal dari rencana
+PROGRESS PEKERJAAN| Rekap progres pekerjaan awal dan tambahan
+KALENDER MINGGU| Dasar perhitungan tanggal dan periode proyek
+REKAP PELAKSANA| Daftar pelaksana dan rekap volume pekerjaan per satuan
+PERUBAHAN PEKERJAAN| Pencatatan pekerjaan tambah, kurang, batal, pending, dan VO
+
+B. ADMIN — Management & Cost Control
+
+Digunakan oleh manajemen untuk memantau progres, nilai kontrak, ongkos tenaga kerja, dan perubahan pekerjaan.
+
+Fitur utama:
+
+Sheet| Fungsi
+SETUP| Konfigurasi koneksi ke file STAFF dan status sinkronisasi
+RAB UPDATE| Master RAB, harga satuan, volume, dan nilai kontrak
+DATA STAF| Penyimpanan data hasil sinkronisasi dari STAFF
+NILAI PROGRES| Perhitungan progres, nilai pekerjaan, ongkos tukang, dan selisih biaya
+TERMIN (Rp)| Monitoring termin pembayaran dan tagihan
+REKAP PELAKSANA (Rp)| Rekap nilai kontrak, progres, dan ongkos per pelaksana
+PERUBAHAN (Rp)| Rekap finansial pekerjaan tambah dan kurang
+
+3. Google Apps Script — SINKRON_ART_PEL3.gs
+
+File "SINKRON_ART_PEL3.gs" merupakan mesin integrasi antara spreadsheet ADMIN dan STAFF.
+
+Script ditempel pada Google Sheets ADMIN melalui:
+
+"Extensions → Apps Script"
+
+Script membaca Spreadsheet ID/URL STAFF dari:
+
+"ADMIN → SETUP!B3"
+
+Kemudian membuka spreadsheet STAFF menggunakan "SpreadsheetApp.openById()".
+
+Main Functions
+
+Function| Responsibility
+"sinkron()"| Sinkronisasi utama data STAFF ke ADMIN
+"baca_()"| Membaca data dari sheet STAFF
+"tulis_()"| Menulis data ke sheet ADMIN
+"extractId_()"| Mengambil Spreadsheet ID dari URL atau ID
+"onEdit(e)"| Mendeteksi perubahan tarif pada tabel detail ADMIN
+"lokasiTarif_()"| Menemukan lokasi tabel tarif dan detail
+"tarifDariDetail_()"| Menyimpan perubahan tarif dari detail ke tabel tarif
+"manKeAdmin()"| Sinkronisasi blok pekerjaan manual STAFF ke ADMIN
+"manKeStaff()"| Sinkronisasi blok pekerjaan manual ADMIN ke STAFF
+"onEditManual(e)"| Mendeteksi perubahan pekerjaan manual di ADMIN
+"onChangeManual(e)"| Menangani perubahan struktur baris pekerjaan manual
+"pasangManual()"| Memasang trigger sinkronisasi manual
+"pasangOtomatis()"| Mengaktifkan sinkronisasi otomatis setiap 15 menit
+"matikanOtomatis()"| Menghapus trigger otomatis
+"onOpen()"| Menampilkan menu Sinkron di Google Sheets
+
+4. Synchronization Workflow
+
+Main Synchronization: STAFF → ADMIN
+
+STAFF GOOGLE SHEETS
+        |
+        v
+PRODUKTIVITAS HARIAN
+        |
+        v
+BOBOT PEK
+        |
+        +---- Pelaksana
+        +---- Uraian pekerjaan
+        +---- Status item
+        +---- Volume revisi
+        +---- Catatan status
+        +---- Volume pelaksana 1–5
+        +---- Mode pembagian
+        |
+        v
+GOOGLE APPS SCRIPT
+        |
+        v
+ADMIN / DATA STAF
+        |
+        +---- Data produktivitas
+        +---- Data pekerjaan
+        +---- Data pelaksana
+        +---- Data pembagian
+        +---- Kalender mingguan
+        +---- Rekap pelaksana
+        |
+        v
+NILAI PROGRES & REKAP ADMIN
+
+Script melakukan validasi data sebelum menulis ke ADMIN. Data pekerjaan dicocokkan menggunakan referensi baris RAB dan uraian pekerjaan.
+
+Jika validasi gagal, proses dihentikan dan status kegagalan dicatat pada "SETUP!B5".
+
+Manual Work Synchronization
+
+Blok pekerjaan manual pada:
+
+- STAFF: "PERUBAHAN PEKERJAAN"
+- ADMIN: "PERUBAHAN (Rp)"
+
+Disinkronkan berdasarkan judul seksi dan struktur blok "[MANUAL]", "SEK", "SUB", dan "[AKHIR MANUAL]".
+
+Arah sinkronisasi:
+
+- STAFF → ADMIN melalui "manKeAdmin()".
+- ADMIN → STAFF melalui "manKeStaff()".
+
+Harga pekerjaan manual tetap dikelola di ADMIN dan tidak ditimpa oleh data STAFF.
+
+5. Tariff & Labor Cost Calculation
+
+Sistem memiliki mekanisme pengelolaan tarif tenaga kerja melalui "REKAP PELAKSANA (Rp)".
+
+Alur yang berjalan saat ini:
+
+1. Tarif dapat dimasukkan pada kolom Upah Satuan di tabel detail.
+2. Apps Script mendeteksi perubahan menggunakan "onEdit(e)".
+3. Tarif disimpan ke tabel TARIF berdasarkan pelaksana dan satuan/kode tarif.
+4. Formula detail mengambil kembali tarif dari tabel tersebut.
+5. Hasil perhitungan diteruskan ke "NILAI PROGRES" dan rekap biaya.
+
+Catatan pengembangan: mekanisme tarif saat ini masih menggunakan basis tarif pelaksana dan satuan/kode tarif secara umum. Pengembangan berikutnya diarahkan ke tarif individual per pekerjaan agar tarif satu pelaksana pada pekerjaan berbeda dapat ditentukan secara independen.
+
+6. Synchronization Modes
+
+Sistem menyediakan tiga mode pembagian pelaksana pada STAFF:
+
+Mode| Fungsi
+VOLUME| Pembagian berdasarkan volume pekerjaan masing-masing pelaksana
+SAMA| Pembagian menggunakan mekanisme volume/bobot yang sama sesuai formula workbook
+PERSEN| Pembagian menggunakan persentase nilai masing-masing pelaksana
+
+Definisi perhitungan setiap mode harus mengikuti formula dan aturan bisnis pada workbook. Perubahan formula tidak boleh mengubah arti mode tanpa audit dan pengujian.
+
+7. How to Install
+
+Step 1 — Upload to Google Sheets
+
+1. Upload file ADMIN dan STAFF ke Google Drive.
+2. Konversi masing-masing file menjadi Google Sheets.
+3. Pertahankan kedua spreadsheet sebagai file operasional terpisah.
+4. Jangan membuat ulang spreadsheet saat melakukan update script.
+
+Step 2 — Connect ADMIN to STAFF
+
+1. Buka spreadsheet ADMIN.
+2. Masuk ke sheet "SETUP".
+3. Tempel URL atau Spreadsheet ID STAFF ke sel "B3".
+
+Step 3 — Install Apps Script
+
+1. Buka ADMIN.
+2. Pilih "Extensions → Apps Script".
+3. Tempel kode "SINKRON_ART_PEL3.gs".
+4. Simpan project.
+5. Jalankan fungsi "sinkron()" untuk otorisasi dan pengujian awal.
+
+Step 4 — Enable Synchronization
+
+Gunakan menu "Sinkron" di spreadsheet ADMIN:
+
+- Sinkron sekarang.
+- Pasang sinkron manual (2 arah).
+- Manual: tarik dari STAFF.
+- Manual: kirim ke STAFF.
+- Aktifkan otomatis tiap 15 menit.
+- Matikan otomatis.
+
+8. Development Principles
+
+Semua pengembangan harus mengikuti prinsip berikut:
+
+SIMPLE
+
+Gunakan kode sesederhana mungkin. Hindari fungsi, formula, dan struktur yang tidak diperlukan.
+
+FUNCTIONAL
+
+Setiap fitur harus bekerja pada Google Sheets sebenarnya, bukan hanya lolos pemeriksaan sintaks.
+
+ROBUST
+
+Lindungi data dari duplikasi, kesalahan referensi, konflik eksekusi, dan penimpaan formula.
+
+RELIABLE SYNC
+
+Sinkronisasi harus dapat divalidasi. Jangan menganggap trigger berhasil berarti data sudah berhasil tersinkron.
+
+MINIMAL PATCH
+
+Utamakan patch Apps Script yang spesifik. Jangan membangun ulang sistem jika perubahan kecil sudah cukup.
+
+PRESERVE OPERATIONAL FILES
+
+Jangan mengganti Spreadsheet ID, URL, atau membuat spreadsheet baru sebagai pengganti file aktif.
+
+9. Future Improvements
+
+Prioritas pengembangan:
+
+1. Sinkronisasi dua file yang lebih kuat dengan validasi hasil penulisan.
+2. Identitas pekerjaan yang stabil, tidak bergantung pada nomor baris fisik.
+3. Tarif individual per pekerjaan dan per pelaksana.
+4. Logging, retry, dan recovery untuk sinkronisasi gagal.
+5. Validasi konsistensi data antara ADMIN dan STAFF.
+6. Perlindungan formula dan data input.
+7. Pengujian otomatis dan regression testing.
+
+10. Definition of Done
+
+Setiap perubahan dianggap selesai hanya jika:
+
+- Fungsi yang diminta berjalan.
+- Data ADMIN dan STAFF sesuai.
+- Sinkronisasi berulang tidak membuat duplikasi.
+- Formula yang tidak terkait tetap utuh.
+- Fitur lama tidak rusak.
+- Kesalahan dapat dideteksi dan ditelusuri.
+- Spreadsheet ID dan URL tetap sama.
+- Hasil sudah diverifikasi pada Google Sheets.
+
+---
+
+RAB Master
+
+A practical construction project control system built with Google Sheets and Google Apps Script.
+
+Simple. Functional. Robust. Reliable.
