@@ -1,4 +1,4 @@
-/* (PEL3 + UPAH V3) SINKRON FILE ADMIN <- FILE STAFF. Upah per pekerjaan+pelaksana di sheet BOBOT PEK (ADMIN), menu Tarif. Tempel di file ADMIN: Extensions > Apps Script (ganti SELURUH isi file lama). */
+/* (PEL3 + V4) SINKRON FILE ADMIN <- FILE STAFF. Upah per pekerjaan+pelaksana (BOBOT PEK), material (AHS + MATERIAL), harga online. Tempel di file ADMIN: Extensions > Apps Script (ganti SELURUH isi file lama). */
 var CFG={"N":141,"LASTR":198,"B0":40,"NT":8,"NP":40,"NSAT":14,"RTB":52,"RTH":53,"RT1":54,"D1":98,"Q":[9,10,11,12,13,16,17,18,19,20,21,22,23,24,25,26,27,28,31,32,33,34,35,36,37,38,39,40,43,44,45,46,47,50,51,52,53,54,55,58,59,62,63,64,65,66,69,70,71,72,73,76,77,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,97,98,99,100,101,104,105,106,109,110,111,114,115,116,119,120,121,122,123,124,125,126,129,130,131,132,133,136,137,138,139,140,143,144,145,146,147,148,149,150,151,154,155,156,157,160,161,162,163,164,167,168,171,172,175,176,177,178,179,180,181,182,183,184,185,186,187,190,191,192,195,196,197]};
 function extractId_(v){var m=String(v||'').match(/\/d\/([a-zA-Z0-9_-]+)/);return m?m[1]:String(v||'').trim();}
 function baca_(src,sheet,a1){
@@ -56,52 +56,6 @@ function sinkron(){
 }
 /* Tarif 2 arah: ketik Upah satuan (kolom H, tabel DETAIL) -> otomatis masuk tabel TARIF (pelaksana x satuan). Tabel TARIF -> kolom H lewat rumus.
    Posisi tabel dicari lewat JUDUL, dan nomor item dibaca dari rumus kolom D baris itu sendiri: aman bila baris disisipkan/dihapus. */
-function lokasiTarif_(sh){
-  var last=sh.getLastRow(),B=sh.getRange(1,2,last,1).getValues(),H=sh.getRange(1,8,last,1).getValues(),rtb=-1,d1=-1,i;
-  for(i=0;i<last;i++){
-    if(rtb<0&&String(B[i][0]).indexOf('TARIF UPAH PER PELAKSANA')===0)rtb=i+1;
-    if(rtb>0&&d1<0&&i+1>rtb&&String(H[i][0]).indexOf('Upah satuan')===0)d1=i+2;
-  }
-  return(rtb<0||d1<0)?null:{RTH:rtb+1,RT1:rtb+2,D1:d1};
-}
-function tarifDariDetail_(sh,ra,rb){
-  var ss=SpreadsheetApp.getActive(),k=function(x){return String(x).replace(/\s+/g,' ').trim().toLowerCase();},tst=function(m){ss.toast(m,'Tarif',10);};
-  var P=lokasiTarif_(sh);if(!P){tst('Judul tabel TARIF / DETAIL tidak ditemukan (dihapus/diubah?). Tarif tidak disimpan.');return;}
-  var a=Math.max(ra,P.D1),b=Math.min(rb,sh.getLastRow());if(a>b)return;
-  var n=b-a+1,i,msg=[],ok=0,W=CFG.NSAT+3;
-  /* nomor baris RAB tiap item: dari rumus kolom D (='NILAI PROGRES'!F<q>), bukan dari daftar tetap */
-  var dF=sh.getRange(a,4,n,1).getFormulas(),Qs=[];
-  for(i=0;i<n;i++){var mm=/NILAIPROGRES'!F(\d+)$/.exec(String(dF[i][0]).replace(/\s+/g,''));Qs.push(mm?Number(mm[1]):0);}
-  var hfm=function(q){return "='NILAI PROGRES'!N"+q;};
-  var restore=function(){for(var j=0;j<n;j++)if(Qs[j])sh.getRange(a+j,8).setFormula(hfm(Qs[j]));};
-  var nm=sh.getRange(P.RT1,2,CFG.NP,1).getValues(),A1=sh.getRange(P.RT1,1).getValue(),A2=sh.getRange(P.RT1+CFG.NP-1,1).getValue();
-  if(Number(A1)!==1||Number(A2)!==CFG.NP){restore();tst('Susunan tabel TARIF berubah (baris disisipkan/dihapus di dalam tabel). Tarif tidak disimpan. Isi lewat tabel TARIF.');return;}
-  var hdr=sh.getRange(P.RTH,3,1,W).getValues()[0],blk=sh.getRange(P.RT1,3,CFG.NP,W).getValues(),
-    det=sh.getRange(a,3,n,6).getValues(),cur=sh.getRange(a,8,n,1).getFormulas(),raws=sh.getRange(a,8,n,1).getValues(),
-    np=ss.getSheetByName('NILAI PROGRES'),NR_=Math.max(np.getLastRow(),Math.max.apply(null,Qs.concat([1]))),vv=np.getRange(1,22,NR_,2).getValues(),n2=np.getRange(1,30,NR_,1).getValues(),hdrChg=false;
-  for(i=0;i<n;i++){
-    var q=Qs[i],raw=raws[i][0];
-    if(!q){if(raw!==''&&raw!==null)msg.push('baris '+(a+i)+': bukan baris item');continue;}
-    if(String(cur[i][0]).replace(/\s+/g,'')===hfm(q))continue; /* rumus masih utuh = tidak diubah */
-    var kd=String(vv[q-1][1]).trim(),sd=kd?kd:String(det[i][3]).trim(),pel=k(det[i][0]),sat=k(sd),val,lab=String(det[i][0]).trim()+' / '+sd;
-    if(String(n2[q-1][0]).trim()!==''){msg.push(lab+': item dibagi >1 pelaksana, isi tarif lewat tabel TARIF');continue;}
-    if(!pel||!sat){msg.push('baris '+(a+i)+': pelaksana/satuan kosong');continue;}
-    if(Number(vv[q-1][0])>0){msg.push(lab+': item punya upah khusus (kolom V NILAI PROGRES), kosongkan dulu');continue;}
-    if(raw===''||raw===null)val='';
-    else{val=Number(raw);if(typeof raw!=='number'||!isFinite(val)||val<0){msg.push(lab+': harus angka >= 0');continue;}}
-    var pr=-1,sc=-1,j;
-    for(j=0;j<nm.length;j++)if(k(nm[j][0])===pel){pr=j;break;}
-    if(pr<0){msg.push(lab+': pelaksana tidak ada di tabel TARIF');continue;}
-    for(j=0;j<W;j++)if(k(hdr[j])===sat){sc=j;break;}
-    if(sc<0){for(j=0;j<W;j++)if(String(hdr[j]).trim()===''){sc=j;hdr[j]=sd;hdrChg=true;break;}}
-    if(sc<0){msg.push(lab+': kolom satuan di tabel TARIF penuh');continue;}
-    blk[pr][sc]=val;ok++;
-  }
-  if(hdrChg)sh.getRange(P.RTH,3,1,W).setValues([hdr]);
-  if(ok)sh.getRange(P.RT1,3,CFG.NP,W).setValues(blk);
-  restore();
-  if(ok||msg.length)tst((ok?ok+' tarif tersimpan ke tabel TARIF (berlaku utk semua item pelaksana+kode/satuan yang sama). ':'')+(msg.length?'Ditolak: '+msg.slice(0,5).join('; '):''));
-}
 /* ===== MANUAL TAMBAH / KURANG: sinkron 2 arah STAFF <-> ADMIN (blok [MANUAL] ... [AKHIR MANUAL] pada sheet PERUBAHAN) =====
    Kolom dicari lewat judul header (KODE, AREA, URAIAN, STATUS, ALASAN/DESKRIPSI, VOLUME, SAT., T/K, HARGA SATUAN, KETERANGAN),
    jadi aman bila kolom disisip / digeser. Penanda blok ada di satu kolom yang berisi tulisan [MANUAL] (SEK, SUB, [AKHIR MANUAL]).
@@ -240,12 +194,15 @@ function pasangOtomatis(){
   ScriptApp.newTrigger('sinkron').timeBased().everyMinutes(15).create();
 }
 
-/* ===================== UPAH PER PEKERJAAN + PELAKSANA (V3) =====================
-   Sheet BOBOT PEK (ADMIN): 1 baris = 1 pekerjaan; nomor baris SAMA dengan RAB UPDATE / NILAI PROGRES / DATA STAF.
+/* ===================== UPAH + MATERIAL + HARGA ONLINE (V4) =====================
+   BOBOT PEK (ADMIN): 1 baris = 1 pekerjaan; nomor baris SAMA dengan RAB UPDATE / NILAI PROGRES / DATA STAF.
    G:I pelaksana 1 (nama, volume/%, UPAH kuning) ... S:U pelaksana 5. V = CEK. W:AA (tersembunyi) = nama saat upah diisi.
-   NILAI PROGRES AM:AQ membaca langsung sel UPAH di baris yang sama (tanpa tabel tarif, tanpa pencarian).
-   Upah hanya dipakai bila nama pelaksana sekarang = nama saat upah diisi (mencegah upah salah orang). */
-var BP={SH:'BOBOT PEK',AR:'ARSIP_UPGRADE_V3',R0:8,NM:[7,10,13,16,19],VL:[8,11,14,17,20],UP:[9,12,15,18,21],CEK:22,GD:[23,24,25,26,27],RAW:28};
+   AC:AG material kantor/sat, material dibeli pelaksana/sat, RAP item, nilai RAB item, selisih (dari sheet AHS).
+   AHS: komponen material per pekerjaan (pilih dari MATERIAL x koefisien). MATERIAL: master harga satuan (+ usulan harga online).
+   NILAI PROGRES AM:AQ membaca langsung sel UPAH di baris yang sama. Upah hanya dipakai bila nama pelaksana sekarang = nama saat upah diisi. */
+var BP={SH:'BOBOT PEK',AR:'ARSIP_UPGRADE_V3',R0:8,NM:[7,10,13,16,19],VL:[8,11,14,17,20],UP:[9,12,15,18,21],CEK:22,GD:[23,24,25,26,27],RAW:28,MAT:[29,30,31,32,33]};
+var MT={SH:'MATERIAL',R0:7,RN:506};
+var AH={SH:'AHS',R0:7,RN:1006};
 
 function colL_(n){var s='',m;while(n>0){m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;}
 function bpKunci_(fn){
@@ -253,20 +210,22 @@ function bpKunci_(fn){
   if(!lk.tryLock(30000))throw new Error('Spreadsheet sedang dipakai proses lain. Coba lagi sebentar lagi.');
   try{return fn();}finally{lk.releaseLock();}
 }
+
 function bpNKS_(){return CFG.NKS!=null?CFG.NKS:3;}
+
 function bpB50_(rp){
   var v=rp.getRange(1,2,Math.min(rp.getLastRow(),150),1).getValues();
   for(var i=0;i<v.length;i++)if(String(v[i][0]).indexOf('Item bertugas tapi tarif belum diisi')===0)return i+1;
   return 0;
 }
-/* V3 aktif bila rumus AM:AQ membaca sheet BOBOT PEK */
+
 function bpAktif_(){
   var np=SpreadsheetApp.getActive().getSheetByName('NILAI PROGRES');if(!np)return false;
   var F=np.getRange(BP.R0,39,CFG.LASTR-BP.R0+1,1).getFormulas();
   for(var i=0;i<F.length;i++)if(F[i][0]!=='')return String(F[i][0]).indexOf("'BOBOT PEK'!")>=0;
   return false;
 }
-/* item = baris yang nomor RAB-nya (DATA STAF kolom A) sama dengan nomor barisnya */
+
 function bpItems_(){
   var ss=SpreadsheetApp.getActive(),np=ss.getSheetByName('NILAI PROGRES'),ds=ss.getSheetByName('DATA STAF'),n=CFG.LASTR-BP.R0+1;
   if(!np||!ds)throw new Error('Sheet NILAI PROGRES / DATA STAF tidak ditemukan');
@@ -282,7 +241,6 @@ function bpItems_(){
   return out;
 }
 
-/* ---------- rumus sheet BOBOT PEK ---------- */
 function bpFA_(r){
   var N="'NILAI PROGRES'!",D="'DATA STAF'!";
   return [
@@ -294,98 +252,22 @@ function bpFA_(r){
     'IF('+D+'$A'+r+'<>'+r+',"",IF(TRIM('+D+'$AK'+r+'&"")="","VOLUME",UPPER(TRIM('+D+'$AK'+r+'&""))))'
   ].map(function(x){return '='+x;});
 }
+
 function bpFS_(r,k){
   var N="'NILAI PROGRES'!",D="'DATA STAF'!",a=N+colL_(29+k)+r,nm=colL_(BP.NM[k])+r,v=D+colL_(32+k)+r;
   return ['=IF('+a+'="","",'+a+')','=IF('+nm+'="","",IF('+v+'="","",'+v+'))'];
 }
-function bpFRaw_(r){
-  var nm=[],vl=[],up=[],gd=[],k;
-  for(k=0;k<5;k++){nm.push(colL_(BP.NM[k])+r);vl.push(colL_(BP.VL[k])+r);up.push(colL_(BP.UP[k])+r);gd.push(colL_(BP.GD[k])+r);}
-  var S='$E'+r,F='$F'+r,D='$D'+r,
-    cnt='('+nm.map(function(x){return '('+x+'<>"")';}).join('+')+')',
-    a=nm.map(function(x,k){return 'IF(AND('+x+'<>"",'+up[k]+'=""),"UPAH KOSONG "&'+x+'&"; ","")';}),
-    b=nm.map(function(x,k){return 'IF(AND('+x+'<>"",'+up[k]+'<>"",TRIM('+gd[k]+'&"")<>TRIM('+x+')),"NAMA BERUBAH "&'+x+'&" (upah dibuat untuk "&IF(TRIM('+gd[k]+'&"")="","?",TRIM('+gd[k]+'&""))&"); ","")';}),
-    c=nm.map(function(x,k){return 'IF(AND('+x+'<>"",'+vl[k]+'<>"",ISTEXT('+vl[k]+')),"ANGKA PEMBAGIAN BUKAN ANGKA "&'+x+'&"; ","")';}),
-    s='('+nm.map(function(x,k){return 'IF(AND('+x+'<>"",ISNUMBER('+vl[k]+')),'+vl[k]+',0)';}).join('+')+')',
-    sp='('+nm.map(function(x,k){return 'IF(AND('+x+'<>"",ISNUMBER('+vl[k]+')),IF('+vl[k]+'>1,'+vl[k]+'/100,'+vl[k]+'),0)';}).join('+')+')',
-    p1='IF(AND('+cnt+'=0,'+S+'="AKTIF",N('+D+')>0),"TANPA PELAKSANA; ","")',
-    p2='IF(AND('+cnt+'>0,'+S+'="AKTIF",N('+D+')<=0),"VOLUME KOSONG; ","")',
-    pm='IF('+cnt+'<2,"",IF('+F+'="PERSEN",IF('+s+'<=0,"PERSEN BELUM DIISI (dibagi rata); ",IF(ABS('+sp+'-1)>0.001,"PERSEN TOTAL "&TEXT('+sp+'*100,"0.#")&"% (harus 100%); ","")),IF('+F+'="SAMA","",IF('+s+'<=0,"VOLUME PELAKSANA BELUM DIISI (dibagi rata); ",IF(ABS('+s+'-N('+D+'))>0.01,"ALOKASI "&TEXT('+s+',"#,##0.##")&" BEDA DARI VOLUME "&TEXT(N('+D+'),"#,##0.##")&"; ","")))))',
-    pu='IF(AND('+F+'<>"VOLUME",'+F+'<>"SAMA",'+F+'<>"PERSEN"),"MODE TIDAK DIKENAL; ","")';
-  return '=IF(OR('+F+'="",'+S+'="BATAL"),"",'+[p1,p2].concat(a,b,c,[pm,pu]).join('&')+')';
-}
-function bpFCek_(r){var R='$'+colL_(BP.RAW)+r;return '=IF(OR($F'+r+'="",$E'+r+'="BATAL"),"",IF('+R+'="","OK",LEFT('+R+',LEN('+R+')-2)))';}
+
 function bpFAM_(r,k){
   var nm=colL_(29+k)+r;
   return '=IF(OR('+nm+'="",UPPER(TRIM($S'+r+'))="BATAL"),0,IF(TRIM(\'BOBOT PEK\'!'+colL_(BP.GD[k])+r+'&"")=TRIM('+nm+'),N(\'BOBOT PEK\'!'+colL_(BP.UP[k])+r+'),0))';
 }
+
 function bpFB50_(){
   var rg="'BOBOT PEK'!$V$"+BP.R0+':$V$'+CFG.LASTR;
   return '="Item bertugas tapi tarif belum diisi: "&(COUNTIF('+rg+',"*UPAH KOSONG*")+COUNTIF('+rg+',"*NAMA BERUBAH*"))';
 }
 
-/* ---------- bangun / perbaiki sheet BOBOT PEK (tidak menyentuh sel UPAH & penanda nama) ---------- */
-function bpBangun_(){
-  var ss=SpreadsheetApp.getActive(),np=ss.getSheetByName('NILAI PROGRES'),L=CFG.LASTR,R0=BP.R0,n=L-R0+1,sh=ss.getSheetByName(BP.SH),items=bpItems_(),isItem={},k,i,r;
-  items.forEach(function(x){isItem[x.r]=1;});
-  if(!sh)sh=ss.insertSheet(BP.SH,np.getIndex());
-  var fa=[],raw=[],cek=[];
-  for(r=R0;r<=L;r++){fa.push(bpFA_(r));raw.push([bpFRaw_(r)]);cek.push([bpFCek_(r)]);}
-  sh.getRange(R0,1,n,6).setFormulas(fa);
-  for(k=0;k<5;k++){
-    var fs=[];for(r=R0;r<=L;r++)fs.push(bpFS_(r,k));
-    sh.getRange(R0,BP.NM[k],n,2).setFormulas(fs);
-  }
-  sh.getRange(R0,BP.CEK,n,1).setFormulas(cek);
-  sh.getRange(R0,BP.RAW,n,1).setFormulas(raw);
-  /* judul */
-  sh.getRange(1,1).setValue('BOBOT PEK + UPAH PELAKSANA (ADMIN)').setFontWeight('bold').setFontSize(13);
-  sh.getRange(2,1).setValue('Isi UPAH per satuan (kolom KUNING) untuk tiap pelaksana, di baris pekerjaannya. Nama pelaksana, volume/% dan status otomatis dari file STAFF: jangan diubah di sini. Kolom CEK menjelaskan apa yang perlu dibenahi.');
-  sh.getRange(3,1).setValue('Upah dikunci ke NAMA pelaksana saat diisi. Jika nama/urutan pelaksana di STAFF berubah, upah itu TIDAK dipakai dan CEK menandai: periksa, lalu menu Tarif > Konfirmasi upah sesuai nama sekarang.');
-  sh.getRange(4,1).setValue('Perlu dicek:').setFontWeight('bold');
-  sh.getRange(4,3).setFormula('=SUMPRODUCT((V'+R0+':V'+L+'<>"")*(V'+R0+':V'+L+'<>"OK"))&" item"').setFontWeight('bold').setFontColor('#C00000');
-  var h6=['','','','','','','PELAKSANA 1','','','PELAKSANA 2','','','PELAKSANA 3','','','PELAKSANA 4','','','PELAKSANA 5','','','','','','','','',''],
-      h7=['No','Uraian pekerjaan','Sat','Volume','Status','Mode'];
-  for(k=0;k<5;k++)h7.push('Nama','Volume / %','UPAH /sat (Rp)');
-  h7.push('CEK','nama saat upah diisi 1','nama saat upah diisi 2','nama saat upah diisi 3','nama saat upah diisi 4','nama saat upah diisi 5','cek mentah');
-  sh.getRange(6,1,1,28).setValues([h6]).setFontWeight('bold').setBackground('#BDD7EE');
-  sh.getRange(7,1,1,28).setValues([h7]).setFontWeight('bold').setBackground('#BDD7EE').setWrap(true).setHorizontalAlignment('center');
-  /* format */
-  var W=[40,300,50,70,70,70];for(i=0;i<6;i++)sh.setColumnWidth(i+1,W[i]);
-  for(k=0;k<5;k++){sh.setColumnWidth(BP.NM[k],110);sh.setColumnWidth(BP.VL[k],75);sh.setColumnWidth(BP.UP[k],110);}
-  sh.setColumnWidth(BP.CEK,380);
-  sh.getRange(R0,4,n,1).setNumberFormat('#,##0.00');
-  sh.getRange(R0,2,n,1).setWrap(true);
-  var rule=SpreadsheetApp.newDataValidation().requireNumberGreaterThanOrEqualTo(0).setAllowInvalid(false).setHelpText('Isi angka rupiah per satuan (>= 0).').build(),unprot=[],rules=[];
-  for(k=0;k<5;k++){
-    var bg=[];for(r=R0;r<=L;r++)bg.push([isItem[r]?'#FFF2CC':'#FFFFFF']);
-    var ur=sh.getRange(R0,BP.UP[k],n,1);
-    ur.setBackgrounds(bg).setNumberFormat('#,##0').setDataValidation(rule);
-    unprot.push(ur);
-    var uc=colL_(BP.UP[k]),nc=colL_(BP.NM[k]),gc=colL_(BP.GD[k]);
-    rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($'+nc+R0+'<>"",$'+uc+R0+'<>"",TRIM($'+gc+R0+'&"")<>TRIM($'+nc+R0+'))').setBackground('#FFD966').setRanges([ur]).build());
-    rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($'+nc+R0+'<>"",$'+uc+R0+'="")').setBackground('#FFC7CE').setRanges([ur]).build());
-  }
-  var cr=sh.getRange(R0,BP.CEK,n,1);
-  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($V'+R0+'<>"",$V'+R0+'<>"OK")').setBackground('#F8D7DA').setFontColor('#9C0006').setRanges([cr]).build());
-  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$V'+R0+'="OK"').setFontColor('#2E7D32').setRanges([cr]).build());
-  sh.setConditionalFormatRules(rules);
-  sh.setFrozenRows(7);sh.setFrozenColumns(2);
-  sh.hideColumns(BP.GD[0],6);
-  /* proteksi lunak: hanya kolom UPAH yang bebas; sel lain memberi peringatan bila diedit */
-  sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(function(p){p.remove();});
-  var pr=sh.protect().setDescription('BOBOT PEK: hanya kolom UPAH (kuning) yang diisi').setWarningOnly(true);
-  pr.setUnprotectedRanges(unprot);
-  /* penghitung di SETUP */
-  var su=ss.getSheetByName('SETUP');
-  if(su){
-    su.getRange(6,1).setValue('BOBOT PEK perlu dicek:').setFontWeight('bold');
-    su.getRange(6,2).setFormula("=SUMPRODUCT(('BOBOT PEK'!V"+R0+":V"+L+"<>\"\")*('BOBOT PEK'!V"+R0+":V"+L+"<>\"OK\"))&\" item (lihat sheet BOBOT PEK kolom CEK)\"");
-  }
-  return sh;
-}
-
-/* ---------- arsip kondisi sebelum upgrade (untuk rollback) ---------- */
 function bpArsip_(items){
   var ss=SpreadsheetApp.getActive(),np=ss.getSheetByName('NILAI PROGRES'),rp=ss.getSheetByName('REKAP PELAKSANA (Rp)'),n=CFG.LASTR-BP.R0+1,i,k;
   var F=np.getRange(BP.R0,39,n,5).getFormulas(),X=np.getRange(BP.R0,49,n,2).getFormulas(),Vv=np.getRange(BP.R0,39,n,5).getValues();
@@ -402,7 +284,6 @@ function bpArsip_(items){
   sh.hideSheet();
 }
 
-/* ---------- UPGRADE file lama -> BOBOT PEK ---------- */
 function bpUpgrade_(){
   var ss=SpreadsheetApp.getActive(),np=ss.getSheetByName('NILAI PROGRES'),rp=ss.getSheetByName('REKAP PELAKSANA (Rp)'),L=CFG.LASTR,n=L-BP.R0+1,k,i,r;
   var already=bpAktif_(),items=bpItems_(),info={impor:0,sudah:already};
@@ -444,24 +325,7 @@ function bpUpgrade_(){
   info.total=Math.round(post);
   return info;
 }
-/* catatan / tanda arsip pada bagian lama (on=true: pasang, false: lepas) */
-function bpCatatan_(on){
-  var ss=SpreadsheetApp.getActive(),np=ss.getSheetByName('NILAI PROGRES'),rp=ss.getSheetByName('REKAP PELAKSANA (Rp)'),i,nm;
-  np.getRange(6,22).setNote(on?'Tidak dipakai lagi. Upah diisi di sheet BOBOT PEK.':'');
-  np.getRange(6,23).setNote(on?'Tidak dipakai lagi. Upah diisi di sheet BOBOT PEK.':'');
-  var P=null;try{P=lokasiTarif_(rp);}catch(x){}
-  if(P){
-    var rg=rp.getRange(P.RTH,2,1+CFG.NP,CFG.NSAT+bpNKS_()+1);
-    rg.setBackground(on?'#D9D9D9':'#FFFF00');
-    rp.getRange(P.RTH,2).setNote(on?'ARSIP: tabel ini tidak dipakai lagi. Upah per pelaksana diisi di sheet BOBOT PEK.':'');
-  }
-  ['TARIF_PEKERJAAN','BACKUP_TARIF_ITEM','BACKUP_TARIF_GLOBAL'].forEach(function(s){
-    var x=ss.getSheetByName(s);if(!x)return;
-    try{if(on)x.hideSheet();else x.showSheet();}catch(e){}
-  });
-}
 
-/* ---------- ROLLBACK ke kondisi sebelum upgrade ---------- */
 function bpRollback_(){
   var ss=SpreadsheetApp.getActive(),np=ss.getSheetByName('NILAI PROGRES'),rp=ss.getSheetByName('REKAP PELAKSANA (Rp)'),ar=ss.getSheetByName(BP.AR),n=CFG.LASTR-BP.R0+1;
   if(!ar)throw new Error('Sheet '+BP.AR+' tidak ada: rollback otomatis tidak bisa dilakukan.');
@@ -478,7 +342,6 @@ function bpRollback_(){
   SpreadsheetApp.flush();
 }
 
-/* ---------- KONFIRMASI upah sesuai nama sekarang ---------- */
 function bpDaftarBeda_(){
   var ss=SpreadsheetApp.getActive(),sh=ss.getSheetByName(BP.SH),n=CFG.LASTR-BP.R0+1,out=[],k,i;
   if(!sh)return out;
@@ -490,13 +353,13 @@ function bpDaftarBeda_(){
   }
   return out;
 }
+
 function bpKonfirmasi_(){
   var sh=SpreadsheetApp.getActive().getSheetByName(BP.SH),L=bpDaftarBeda_();
   L.forEach(function(x){sh.getRange(x.r,BP.GD[x.k]).setValue(x.nama);});
   return L.length;
 }
 
-/* ---------- tanda "upah dibuat untuk <nama>" saat upah diisi ---------- */
 function bpStempel_(sh,r1,r2,c1,c2){
   r1=Math.max(r1,BP.R0);if(r2<r1)return;
   var n=r2-r1+1,k,i;
@@ -507,7 +370,226 @@ function bpStempel_(sh,r1,r2,c1,c2){
     sh.getRange(r1,BP.GD[k],n,1).setValues(out);
   }
 }
-/* sheet REKAP PELAKSANA (Rp) saat V3 aktif: kolom Upah satuan (H) hanya tampilan; tabel lama = arsip */
+
+/* ---------- CEK baris BOBOT PEK (kolom mentah AB, ditampilkan di kolom V) ---------- */
+function bpFRaw_(r){
+  var nm=[],vl=[],up=[],gd=[],k;
+  for(k=0;k<5;k++){nm.push(colL_(BP.NM[k])+r);vl.push(colL_(BP.VL[k])+r);up.push(colL_(BP.UP[k])+r);gd.push(colL_(BP.GD[k])+r);}
+  var S='$E'+r,F='$F'+r,D='$D'+r,MC=BP.MAT.map(function(c){return colL_(c)+r;}),NN="N('NILAI PROGRES'!N"+r+")",
+    cnt='('+nm.map(function(x){return '('+x+'<>"")';}).join('+')+')',
+    a=nm.map(function(x,k){return 'IF(AND('+x+'<>"",'+up[k]+'=""),"UPAH KOSONG "&'+x+'&"; ","")';}),
+    b=nm.map(function(x,k){return 'IF(AND('+x+'<>"",'+up[k]+'<>"",TRIM('+gd[k]+'&"")<>TRIM('+x+')),"NAMA BERUBAH "&'+x+'&" (upah dibuat untuk "&IF(TRIM('+gd[k]+'&"")="","?",TRIM('+gd[k]+'&""))&"); ","")';}),
+    c=nm.map(function(x,k){return 'IF(AND('+x+'<>"",'+vl[k]+'<>"",ISTEXT('+vl[k]+')),"ANGKA PEMBAGIAN BUKAN ANGKA "&'+x+'&"; ","")';}),
+    s='('+nm.map(function(x,k){return 'IF(AND('+x+'<>"",ISNUMBER('+vl[k]+')),'+vl[k]+',0)';}).join('+')+')',
+    sp='('+nm.map(function(x,k){return 'IF(AND('+x+'<>"",ISNUMBER('+vl[k]+')),IF('+vl[k]+'>1,'+vl[k]+'/100,'+vl[k]+'),0)';}).join('+')+')',
+    p1='IF(AND('+cnt+'=0,'+S+'="AKTIF",N('+D+')>0),"TANPA PELAKSANA; ","")',
+    p2='IF(AND('+cnt+'>0,'+S+'="AKTIF",N('+D+')<=0),"VOLUME KOSONG; ","")',
+    pm='IF('+cnt+'<2,"",IF('+F+'="PERSEN",IF('+s+'<=0,"PERSEN BELUM DIISI (dibagi rata); ",IF(ABS('+sp+'-1)>0.001,"PERSEN TOTAL "&TEXT('+sp+'*100,"0.#")&"% (harus 100%); ","")),IF('+F+'="SAMA","",IF('+s+'<=0,"VOLUME PELAKSANA BELUM DIISI (dibagi rata); ",IF(ABS('+s+'-N('+D+'))>0.01,"ALOKASI "&TEXT('+s+',"#,##0.##")&" BEDA DARI VOLUME "&TEXT(N('+D+'),"#,##0.##")&"; ","")))))',
+    pu='IF(AND('+F+'<>"VOLUME",'+F+'<>"SAMA",'+F+'<>"PERSEN"),"MODE TIDAK DIKENAL; ","")',
+    p3='IF(AND(N('+MC[1]+')>0,'+NN+'>0,'+NN+'<N('+MC[1]+')),"UPAH/BORONGAN LEBIH KECIL DARI MATERIAL PELAKSANA; ","")',
+    p4='IF(AND(N('+MC[3]+')>0,N('+MC[4]+')<0),"RAP LEBIH BESAR DARI NILAI RAB; ","")';
+  return '=IF(OR('+F+'="",'+S+'="BATAL"),"",'+[p1,p2].concat(a,b,c,[pm,pu,p3,p4]).join('&')+')';
+}
+function bpFCek_(r){var R='$'+colL_(BP.RAW)+r;return '=IF(OR($F'+r+'="",$E'+r+'="BATAL"),"",IF('+R+'="","OK",LEFT('+R+',LEN('+R+')-2)))';}
+/* material & RAP per pekerjaan: AC material kantor/sat, AD material dibeli pelaksana/sat, AE RAP item, AF nilai RAB item, AG selisih */
+function bpFMat_(r){
+  var H='AHS!$H$'+AH.R0+':$H$'+AH.RN,A='AHS!$A$'+AH.R0+':$A$'+AH.RN,G='AHS!$G$'+AH.R0+':$G$'+AH.RN,
+    C=BP.MAT.map(function(c){return colL_(c)+r;}),F='$F'+r,live='OR('+F+'="",$E'+r+'="BATAL")';
+  return [
+    '=IF('+F+'="","",SUMIFS('+H+','+A+','+r+')-'+C[1]+')',
+    '=IF('+F+'="","",SUMIFS('+H+','+A+','+r+','+G+',"PELAKSANA"))',
+    '=IF('+live+',"",(N(\'NILAI PROGRES\'!N'+r+')+'+C[0]+')*N($D'+r+'))',
+    '=IF('+live+',"",N(\'NILAI PROGRES\'!F'+r+'))',
+    '=IF('+live+',"",'+C[3]+'-'+C[2]+')'
+  ];
+}
+
+/* ---------- bangun / perbaiki BOBOT PEK + AHS + MATERIAL (tidak menyentuh sel input) ---------- */
+function bpSheet_(nm,after){var ss=SpreadsheetApp.getActive();return ss.getSheetByName(nm)||ss.insertSheet(nm,after.getIndex());}
+function bpBangun_(){
+  var ss=SpreadsheetApp.getActive(),np=ss.getSheetByName('NILAI PROGRES'),L=CFG.LASTR,R0=BP.R0,n=L-R0+1,items=bpItems_(),isItem={},k,i,r;
+  items.forEach(function(x){isItem[x.r]=1;});
+  var sh=bpSheet_(BP.SH,np),ah=bpSheet_(AH.SH,sh),mt=bpSheet_(MT.SH,ah);        /* semua sheet ada dulu sebelum rumus saling merujuk */
+  var fa=[],raw=[],cek=[],mf=[];
+  for(r=R0;r<=L;r++){fa.push(bpFA_(r));raw.push([bpFRaw_(r)]);cek.push([bpFCek_(r)]);mf.push(bpFMat_(r));}
+  sh.getRange(R0,1,n,6).setFormulas(fa);
+  for(k=0;k<5;k++){
+    var fs=[];for(r=R0;r<=L;r++)fs.push(bpFS_(r,k));
+    sh.getRange(R0,BP.NM[k],n,2).setFormulas(fs);
+  }
+  sh.getRange(R0,BP.CEK,n,1).setFormulas(cek);
+  sh.getRange(R0,BP.RAW,n,1).setFormulas(raw);
+  sh.getRange(R0,BP.MAT[0],n,5).setFormulas(mf);
+  sh.getRange(1,1).setValue('BOBOT PEK + UPAH PELAKSANA + RAP (ADMIN)').setFontWeight('bold').setFontSize(13);
+  sh.getRange(2,1).setValue('Isi UPAH per satuan (kolom KUNING) untuk tiap pelaksana, di baris pekerjaannya. Nama, volume/% dan status otomatis dari file STAFF: jangan diubah di sini. MATERIAL: isi komponen di sheet AHS (harga dari sheet MATERIAL); hasilnya tampil di kolom hijau. Kolom CEK menjelaskan yang perlu dibenahi.');
+  sh.getRange(3,1).setValue('Upah dikunci ke NAMA pelaksana saat diisi. Jika nama/urutan pelaksana di STAFF berubah, upah itu TIDAK dipakai dan CEK menandai: periksa, lalu menu Tarif > Konfirmasi upah sesuai nama sekarang.');
+  sh.getRange(4,1).setValue('Perlu dicek:').setFontWeight('bold');
+  sh.getRange(4,3).setFormula('=SUMPRODUCT((V'+R0+':V'+L+'<>"")*(V'+R0+':V'+L+'<>"OK"))&" item"').setFontWeight('bold').setFontColor('#C00000');
+  var h6=['','','','','','','PELAKSANA 1','','','PELAKSANA 2','','','PELAKSANA 3','','','PELAKSANA 4','','','PELAKSANA 5','','','','','','','','',''],
+      h7=['No','Uraian pekerjaan','Sat','Volume','Status','Mode'];
+  for(k=0;k<5;k++)h7.push('Nama','Volume / %','UPAH /sat (Rp)');
+  h7.push('CEK','nama saat upah diisi 1','nama saat upah diisi 2','nama saat upah diisi 3','nama saat upah diisi 4','nama saat upah diisi 5','cek mentah');
+  sh.getRange(6,1,1,28).setValues([h6]).setFontWeight('bold').setBackground('#BDD7EE');
+  sh.getRange(7,1,1,28).setValues([h7]).setFontWeight('bold').setBackground('#BDD7EE').setWrap(true).setHorizontalAlignment('center');
+  var mc=BP.MAT[0],mL=colL_;
+  sh.getRange(6,mc,1,5).setValues([['MATERIAL & RAP (material dari sheet AHS)','','','','']]).setFontWeight('bold').setBackground('#C6E0B4');
+  sh.getRange(7,mc,1,5).setValues([['MATERIAL KANTOR /sat (Rp)','MATERIAL DIBELI PELAKSANA /sat (Rp)','RAP item (Rp) = (upah + material kantor) x volume','NILAI RAB item (Rp)','SELISIH RAB - RAP (Rp)']]).setFontWeight('bold').setBackground('#C6E0B4').setWrap(true).setHorizontalAlignment('center');
+  sh.getRange(5,mc+1).setValue('TOTAL (tanpa item BATAL)').setFontWeight('bold');
+  sh.getRange(5,mc+2,1,3).setFormulas([['=SUM('+mL(mc+2)+R0+':'+mL(mc+2)+L+')','=SUM('+mL(mc+3)+R0+':'+mL(mc+3)+L+')','=SUM('+mL(mc+4)+R0+':'+mL(mc+4)+L+')']]).setFontWeight('bold').setNumberFormat('#,##0');
+  var W=[40,300,50,70,70,70];for(i=0;i<6;i++)sh.setColumnWidth(i+1,W[i]);
+  for(k=0;k<5;k++){sh.setColumnWidth(BP.NM[k],110);sh.setColumnWidth(BP.VL[k],75);sh.setColumnWidth(BP.UP[k],110);}
+  sh.setColumnWidth(BP.CEK,380);
+  for(i=0;i<5;i++)sh.setColumnWidth(mc+i,125);
+  sh.getRange(R0,4,n,1).setNumberFormat('#,##0.00');
+  sh.getRange(R0,mc,n,5).setNumberFormat('#,##0');
+  sh.getRange(R0,2,n,1).setWrap(true);
+  var rule=SpreadsheetApp.newDataValidation().requireNumberGreaterThanOrEqualTo(0).setAllowInvalid(false).setHelpText('Isi angka rupiah per satuan (>= 0).').build(),unprot=[],rules=[];
+  for(k=0;k<5;k++){
+    var bg=[];for(r=R0;r<=L;r++)bg.push([isItem[r]?'#FFF2CC':'#FFFFFF']);
+    var ur=sh.getRange(R0,BP.UP[k],n,1);
+    ur.setBackgrounds(bg).setNumberFormat('#,##0').setDataValidation(rule);
+    unprot.push(ur);
+    var uc=colL_(BP.UP[k]),nc=colL_(BP.NM[k]),gc=colL_(BP.GD[k]);
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($'+nc+R0+'<>"",$'+uc+R0+'<>"",TRIM($'+gc+R0+'&"")<>TRIM($'+nc+R0+'))').setBackground('#FFD966').setRanges([ur]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($'+nc+R0+'<>"",$'+uc+R0+'="")').setBackground('#FFC7CE').setRanges([ur]).build());
+  }
+  var cr=sh.getRange(R0,BP.CEK,n,1);
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($V'+R0+'<>"",$V'+R0+'<>"OK")').setBackground('#F8D7DA').setFontColor('#9C0006').setRanges([cr]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$V'+R0+'="OK"').setFontColor('#2E7D32').setRanges([cr]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND(ISNUMBER($'+mL(mc+4)+R0+'),$'+mL(mc+4)+R0+'<0)').setFontColor('#9C0006').setRanges([sh.getRange(R0,mc+4,n,1)]).build());
+  sh.setConditionalFormatRules(rules);
+  sh.setFrozenRows(7);sh.setFrozenColumns(2);
+  sh.hideColumns(BP.GD[0],6);
+  sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(function(p){p.remove();});
+  var pr=sh.protect().setDescription('BOBOT PEK: hanya kolom UPAH (kuning) yang diisi').setWarningOnly(true);
+  pr.setUnprotectedRanges(unprot);
+  var su=ss.getSheetByName('SETUP');
+  if(su){
+    su.getRange(6,1).setValue('BOBOT PEK perlu dicek:').setFontWeight('bold');
+    su.getRange(6,2).setFormula("=SUMPRODUCT(('BOBOT PEK'!V"+R0+":V"+L+"<>\"\")*('BOBOT PEK'!V"+R0+":V"+L+"<>\"OK\"))&\" item (lihat sheet BOBOT PEK kolom CEK)\"");
+  }
+  matBangun_(mt);ahsBangun_(ah);
+  return sh;
+}
+
+/* ---------- sheet MATERIAL: master harga satuan material (satu-satunya tempat harga diubah) ---------- */
+function matF_(r){
+  var R0=MT.R0,RN=MT.RN;
+  return {
+    G:'=IF(OR($F'+r+'="",N($C'+r+')=0),"",$F'+r+'/$C'+r+'-1)',
+    J:'=IF($A'+r+'="","",IF(COUNTIF($A$'+R0+':$A$'+RN+',$A'+r+')>1,"NAMA GANDA",IF($B'+r+'="","SATUAN KOSONG",IF(NOT(ISNUMBER($C'+r+')),"HARGA KOSONG","OK"))))'
+  };
+}
+function matBangun_(sh){
+  var R0=MT.R0,RN=MT.RN,n=RN-R0+1,r,G=[],J=[];
+  for(r=R0;r<=RN;r++){var f=matF_(r);G.push([f.G]);J.push([f.J]);}
+  sh.getRange(R0,7,n,1).setFormulas(G);
+  sh.getRange(R0,10,n,1).setFormulas(J);
+  sh.getRange(1,1).setValue('MATERIAL: DAFTAR HARGA SATUAN (master)').setFontWeight('bold').setFontSize(13);
+  sh.getRange(2,1).setValue('Satu baris = satu material dengan satuan belinya (sak, kg, m3, meter, buah, ...). Ubah HARGA di sini saja: semua AHS dan RAP ikut berubah. Tambah material baru di baris kosong. Sheet AHS memilih material dari daftar ini.');
+  sh.getRange(3,1).setValue('Wilayah pencarian harga online:').setFontWeight('bold');
+  if(String(sh.getRange(3,3).getValue()).trim()==='')sh.getRange(3,3).setValue('Indonesia');
+  sh.getRange(3,3).setBackground('#FFF2CC');
+  sh.getRange(3,4).setValue('Isi YA di kolom E untuk material yang harganya ingin dicari online (menu Material > Sync harga online). Hasil masuk ke kolom USULAN dan baru dipakai setelah "Terapkan usulan".');
+  sh.getRange(4,1).setValue('Perlu dicek:').setFontWeight('bold');
+  sh.getRange(4,3).setFormula('=SUMPRODUCT((J'+R0+':J'+RN+'<>"")*(J'+R0+':J'+RN+'<>"OK"))&" baris"').setFontWeight('bold').setFontColor('#C00000');
+  sh.getRange(4,6).setFormula('=(COUNTIF(G'+R0+':G'+RN+',">=0.1")+COUNTIF(G'+R0+':G'+RN+',"<=-0.1"))&" usulan beda >= 10%"').setFontWeight('bold');
+  sh.getRange(6,1,1,10).setValues([['Material','Sat','HARGA (Rp/sat)','Update harga','CARI ONLINE? (YA)','Harga usulan online','Selisih usulan','Tgl cek online','Sumber / catatan online','CEK']]).setFontWeight('bold').setBackground('#BDD7EE').setWrap(true).setHorizontalAlignment('center');
+  var W=[230,70,120,100,90,120,90,100,420,150];for(var i=0;i<10;i++)sh.setColumnWidth(i+1,W[i]);
+  [1,2,3,5].forEach(function(c){sh.getRange(R0,c,n,1).setBackground('#FFF2CC');});
+  sh.getRange(R0,3,n,1).setNumberFormat('#,##0').setDataValidation(SpreadsheetApp.newDataValidation().requireNumberGreaterThanOrEqualTo(0).setAllowInvalid(false).setHelpText('Isi angka rupiah per satuan.').build());
+  sh.getRange(R0,4,n,1).setNumberFormat('dd-mmm-yyyy');
+  sh.getRange(R0,6,n,1).setNumberFormat('#,##0');
+  sh.getRange(R0,7,n,1).setNumberFormat('+0.0%;-0.0%');
+  sh.getRange(R0,8,n,1).setNumberFormat('dd-mmm-yyyy');
+  sh.getRange(R0,5,n,1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['YA'],true).setAllowInvalid(true).build());
+  sh.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($J'+R0+'<>"",$J'+R0+'<>"OK")').setBackground('#F8D7DA').setFontColor('#9C0006').setRanges([sh.getRange(R0,10,n,1)]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND(ISNUMBER($G'+R0+'),ABS($G'+R0+')>=0.1)').setBackground('#FFD966').setRanges([sh.getRange(R0,6,n,2)]).build()]);
+  sh.setFrozenRows(6);sh.setFrozenColumns(1);
+  return sh;
+}
+
+/* ---------- sheet AHS: komponen material per pekerjaan (material dipilih dari MATERIAL x koefisien) ---------- */
+function ahsF_(r){
+  var BN="'BOBOT PEK'!",MA='MATERIAL!$A$'+MT.R0+':$A$'+MT.RN,MB='MATERIAL!$B$'+MT.R0+':$B$'+MT.RN,MC='MATERIAL!$C$'+MT.R0+':$C$'+MT.RN,
+    vol='N(IFERROR(INDEX('+BN+'$D:$D,$A'+r+'),0))';
+  return {
+    B:'=IF($A'+r+'="","",IF(N($A'+r+')<8,"?",IFERROR(INDEX('+BN+'$B:$B,$A'+r+'),"?")))',
+    D:'=IF($C'+r+'="","",IFERROR(INDEX('+MB+',MATCH($C'+r+','+MA+',0)),"?"))',
+    F:'=IF($C'+r+'="","",IFERROR(N(INDEX('+MC+',MATCH($C'+r+','+MA+',0))),"?"))',
+    H:'=IF($A'+r+'="","",IF(AND(ISNUMBER($E'+r+'),N($F'+r+')>0),$E'+r+'*$F'+r+',0))',
+    I:'=IF(OR($A'+r+'="",NOT(ISNUMBER($E'+r+'))),"",$E'+r+'*'+vol+')',
+    J:'=IF(OR($A'+r+'="",$H'+r+'=""),"",$H'+r+'*'+vol+')',
+    K:'=IF(AND($A'+r+'="",$C'+r+'="",$E'+r+'=""),"",IF(N($A'+r+')<8,"ISI NO BARIS (angka baris di sheet BOBOT PEK)",IF(IFERROR(INDEX('+BN+'$F:$F,$A'+r+'),"")="","BARIS BUKAN PEKERJAAN",IF($C'+r+'="","MATERIAL KOSONG",IF($D'+r+'="?","MATERIAL TIDAK ADA DI SHEET MATERIAL",IF(NOT(ISNUMBER($E'+r+')),"KOEFISIEN KOSONG",IF(N($F'+r+')<=0,"HARGA MATERIAL KOSONG (isi di sheet MATERIAL)",IF(AND($G'+r+'<>"",$G'+r+'<>"KANTOR",$G'+r+'<>"PELAKSANA"),"DIBELI OLEH: isi KANTOR atau PELAKSANA","OK"))))))))'
+  };
+}
+function ahsBangun_(sh){
+  var R0=AH.R0,RN=AH.RN,n=RN-R0+1,r,B=[],D=[],F=[],H=[],I=[],J=[],K=[];
+  for(r=R0;r<=RN;r++){var f=ahsF_(r);B.push([f.B]);D.push([f.D]);F.push([f.F]);H.push([f.H]);I.push([f.I]);J.push([f.J]);K.push([f.K]);}
+  sh.getRange(R0,2,n,1).setFormulas(B);
+  sh.getRange(R0,4,n,1).setFormulas(D);
+  sh.getRange(R0,6,n,1).setFormulas(F);
+  sh.getRange(R0,8,n,1).setFormulas(H);
+  sh.getRange(R0,9,n,1).setFormulas(I);
+  sh.getRange(R0,10,n,1).setFormulas(J);
+  sh.getRange(R0,11,n,1).setFormulas(K);
+  sh.getRange(1,1).setValue('AHS: MATERIAL PER PEKERJAAN (material x koefisien)').setFontWeight('bold').setFontSize(13);
+  sh.getRange(2,1).setValue('Satu baris = satu komponen material pada satu pekerjaan. NO BARIS = angka baris pekerjaan di sheet BOBOT PEK (uraiannya tampil di kolom B untuk dicek). MATERIAL = pilih dari sheet MATERIAL (satuan & harga otomatis). KOEFISIEN = jumlah material untuk 1 SATUAN PEKERJAAN.');
+  sh.getRange(3,1).setValue('DIBELI OLEH: KANTOR (masuk RAP kantor) atau PELAKSANA (borongan: material dibeli pelaksana/vendor; hanya pembanding terhadap upah). Kosong = KANTOR. Material tidak dibagi per pelaksana. Contoh: pasang titik lampu = 3 baris (kabel meter, fitting unit, lampu unit) dengan NO BARIS yang sama.');
+  sh.getRange(4,1).setValue('Baris perlu dicek:').setFontWeight('bold');
+  sh.getRange(4,3).setFormula('=SUMPRODUCT((K'+R0+':K'+RN+'<>"")*(K'+R0+':K'+RN+'<>"OK"))&" baris"').setFontWeight('bold').setFontColor('#C00000');
+  sh.getRange(6,1,1,11).setValues([['NO BARIS (BOBOT PEK)','Uraian pekerjaan','Material','Sat material','KOEFISIEN per 1 sat pekerjaan','Harga /sat material (Rp)','DIBELI OLEH','Biaya per 1 sat pekerjaan (Rp)','Kebutuhan total (qty material)','Biaya total (Rp)','CEK']]).setFontWeight('bold').setBackground('#BDD7EE').setWrap(true).setHorizontalAlignment('center');
+  var W=[80,300,200,80,100,120,100,120,120,120,320];for(var i=0;i<11;i++)sh.setColumnWidth(i+1,W[i]);
+  [1,3,5,7].forEach(function(c){sh.getRange(R0,c,n,1).setBackground('#FFF2CC');});
+  sh.getRange(R0,5,n,1).setNumberFormat('#,##0.####');
+  [6,8,10].forEach(function(c){sh.getRange(R0,c,n,1).setNumberFormat('#,##0');});
+  sh.getRange(R0,9,n,1).setNumberFormat('#,##0.##');
+  var ss=SpreadsheetApp.getActive();
+  sh.getRange(R0,1,n,1).setDataValidation(SpreadsheetApp.newDataValidation().requireNumberGreaterThanOrEqualTo(8).setAllowInvalid(false).setHelpText('Isi angka baris pekerjaan di sheet BOBOT PEK.').build());
+  sh.getRange(R0,3,n,1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(ss.getSheetByName(MT.SH).getRange(MT.R0,1,MT.RN-MT.R0+1,1),true).setAllowInvalid(false).setHelpText('Pilih dari sheet MATERIAL (tambahkan dulu di sana bila belum ada).').build());
+  sh.getRange(R0,5,n,1).setDataValidation(SpreadsheetApp.newDataValidation().requireNumberGreaterThanOrEqualTo(0).setAllowInvalid(false).setHelpText('Isi angka >= 0.').build());
+  sh.getRange(R0,7,n,1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['KANTOR','PELAKSANA'],true).setAllowInvalid(false).build());
+  sh.setConditionalFormatRules([SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($K'+R0+'<>"",$K'+R0+'<>"OK")').setBackground('#F8D7DA').setFontColor('#9C0006').setRanges([sh.getRange(R0,11,n,1)]).build()]);
+  sh.setFrozenRows(6);
+  return sh;
+}
+
+/* ---------- bagian lama yang disamarkan setelah BOBOT PEK aktif ---------- */
+function bpTabelLama_(rp){
+  var B=rp.getRange(1,2,Math.max(rp.getLastRow(),1),1).getValues(),i;
+  for(i=0;i<B.length;i++)if(String(B[i][0]).indexOf('TARIF UPAH PER PELAKSANA')===0)return {RTB:i+1,RTH:i+2,RT1:i+3};
+  return null;
+}
+function bpCatatan_(on){
+  var ss=SpreadsheetApp.getActive(),np=ss.getSheetByName('NILAI PROGRES'),rp=ss.getSheetByName('REKAP PELAKSANA (Rp)'),T=bpTabelLama_(rp);
+  np.getRange(6,22).setNote(on?'Tidak dipakai lagi. Upah diisi di sheet BOBOT PEK.':'');
+  np.getRange(6,23).setNote(on?'Tidak dipakai lagi. Upah diisi di sheet BOBOT PEK.':'');
+  if(T){
+    rp.getRange(T.RTH,2,1+CFG.NP,CFG.NSAT+bpNKS_()+1).setBackground(on?'#D9D9D9':'#FFFF00');
+    rp.getRange(T.RTH,2).setNote(on?'ARSIP: tabel ini tidak dipakai lagi. Upah per pelaksana diisi di sheet BOBOT PEK.':'');
+  }
+  ['TARIF_PEKERJAAN','BACKUP_TARIF_ITEM','BACKUP_TARIF_GLOBAL'].forEach(function(s){
+    var x=ss.getSheetByName(s);if(!x)return;
+    try{if(on)x.hideSheet();else x.showSheet();}catch(e){}
+  });
+}
+/* HAPUS PERMANEN sisa versi lama (setelah V3/V4 dipastikan benar). Rollback tidak bisa lagi sesudahnya. */
+function bpBersih_(){
+  var ss=SpreadsheetApp.getActive(),out=[],np=ss.getSheetByName('NILAI PROGRES'),ru=ss.getSheetByName('RAB UPDATE'),rp=ss.getSheetByName('REKAP PELAKSANA (Rp)');
+  if(!bpAktif_())throw new Error('BOBOT PEK belum aktif. Jalankan "Perbarui BOBOT PEK + AHS + MATERIAL" dulu.');
+  ['TARIF_PEKERJAAN','BACKUP_TARIF_ITEM','BACKUP_TARIF_GLOBAL',BP.AR].forEach(function(s){var x=ss.getSheetByName(s);if(x){ss.deleteSheet(x);out.push('sheet '+s);}});
+  if(ru){
+    var qv=ru.getRange(1,17,Math.max(ru.getLastRow(),1),1).getValues(),ch=0;
+    qv.forEach(function(r){if(/^PK-[0-9A-F]{8}$/i.test(String(r[0]))||String(r[0]).indexOf('ID PEKERJAAN')===0){r[0]='';ch++;}});
+    if(ch){ru.getRange(1,17,qv.length,1).setValues(qv);out.push('RAB UPDATE kolom Q ('+ch+' ID lama)');}
+  }
+  if(np&&String(np.getRange(6,49).getValue()).indexOf('ID PEKERJAAN')===0){np.getRange(6,49,1,2).clearContent();out.push('NILAI PROGRES AW:AX (judul lama)');}
+  var T=rp?bpTabelLama_(rp):null;
+  if(T){var nr=CFG.NP+2;rp.getRange(T.RTB,2,nr,CFG.NSAT+bpNKS_()+1).clear();rp.hideRows(T.RTB,nr);out.push('tabel TARIF lama di REKAP (dikosongkan & disembunyikan)');}
+  return out;
+}
+/* sheet REKAP saat BOBOT PEK aktif: kolom Upah satuan (H) hanya tampilan; tabel lama = arsip */
 function bpRekapEdit_(sh,r1,r2,c1,c2){
   var ss=SpreadsheetApp.getActive(),tst=function(m){ss.toast(m,'Upah',10);},last=sh.getLastRow(),i;
   if(c1<=8&&c2>=8){
@@ -525,17 +607,111 @@ function bpRekapEdit_(sh,r1,r2,c1,c2){
       if(fix){tst('Kolom Upah satuan di tabel ini hanya tampilan. Isi upah di sheet BOBOT PEK (kolom kuning).');return;}
     }
   }
-  var P=null;try{P=lokasiTarif_(sh);}catch(x){}
-  if(P&&r2>=P.RT1&&r1<=P.RT1+CFG.NP-1&&c2>=3&&c1<=2+CFG.NSAT+bpNKS_())tst('Tabel TARIF ini ARSIP dan tidak dipakai lagi. Isi upah di sheet BOBOT PEK.');
+  var T=bpTabelLama_(sh);
+  if(T&&r2>=T.RT1&&r1<=T.RT1+CFG.NP-1&&c2>=3&&c1<=2+CFG.NSAT+bpNKS_())tst('Tabel TARIF ini ARSIP dan tidak dipakai lagi. Isi upah di sheet BOBOT PEK.');
+}
+/* tanggal "Update harga" otomatis saat HARGA di sheet MATERIAL diubah */
+function matStempel_(sh,r1,r2,c1,c2){
+  r1=Math.max(r1,MT.R0);if(r2<r1||c1>3||c2<3)return;
+  var n=r2-r1+1,v=sh.getRange(r1,3,n,1).getValues(),out=[],i,now=new Date(),d=sh.getRange(r1,4,n,1).getValues();
+  for(i=0;i<n;i++)out.push([v[i][0]===''?'':now]);
+  sh.getRange(r1,4,n,1).setValues(out);
+}
+
+/* ====================== HARGA ONLINE (usulan harga, tidak menimpa harga master) ====================== */
+function hargaNum_(raw){
+  var m=/^(\d{1,3}(?:[.,]\d{3})*)[.,](\d{1,2})$/.exec(raw);
+  if(m)return Number(m[1].replace(/[.,]/g,'')+'.'+m[2]);
+  if(/^\d{1,3}([.,]\d{3})+$/.test(raw)||/^\d+$/.test(raw))return Number(raw.replace(/[.,]/g,''));
+  return NaN;
+}
+function hargaParseRp_(t){
+  var re=/Rp\.?\s*([0-9]+(?:[.,][0-9]+)*)\s*(juta|jt|ribu|rb|k)?/gi,m,out=[],v,u;
+  t=String(t||'');
+  while((m=re.exec(t))){
+    v=hargaNum_(m[1]);u=(m[2]||'').toLowerCase();
+    if(u==='juta'||u==='jt')v*=1e6;else if(u==='ribu'||u==='rb'||u==='k')v*=1e3;
+    if(v>0&&isFinite(v))out.push(v);
+  }
+  return out;
+}
+function hargaMedian_(a){a=a.slice().sort(function(x,y){return x-y;});var n=a.length;return n?(n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2):0;}
+function hargaRingkas_(v){                                  /* median tanpa pencilan (di luar 0,4x - 2,5x median) */
+  if(!v.length)return null;
+  var m=hargaMedian_(v),f=v.filter(function(x){return x>=m*0.4&&x<=m*2.5;});
+  return f.length?{harga:Math.round(hargaMedian_(f)),n:f.length}:null;
+}
+function hargaJson_(t){
+  var a=String(t||'').indexOf('{'),b=String(t||'').lastIndexOf('}'),o;
+  if(a<0||b<=a)return {harga:null,n:0,sumber:[],catatan:'balasan bukan JSON'};
+  try{o=JSON.parse(String(t).slice(a,b+1));}catch(e){return {harga:null,n:0,sumber:[],catatan:'JSON tidak valid'};}
+  var h=Number(o.harga);
+  return {harga:(isFinite(h)&&h>0&&h<1e9)?Math.round(h):null,n:Number(o.n)||0,sumber:(o.sumber||[]).slice(0,3),catatan:String(o.catatan||'')};
+}
+function hargaCariClaude_(nama,sat,wil,P){
+  var q='Cari harga eceran terbaru material konstruksi "'+nama+'" per '+sat+' di '+wil+' (Indonesia) dengan pencarian web. Balas HANYA satu objek JSON: {"harga":<angka rupiah per '+sat+', atau null>,"n":<jumlah sumber yang dipakai>,"sumber":[<url>],"catatan":"<singkat; sebut bila satuan sumber dikonversi>"}. Jangan menebak: bila tidak ada harga yang jelas, harga null.';
+  var res=UrlFetchApp.fetch('https://api.anthropic.com/v1/messages',{method:'post',contentType:'application/json',muteHttpExceptions:true,
+    headers:{'x-api-key':P.key,'anthropic-version':'2023-06-01'},
+    payload:JSON.stringify({model:P.model,max_tokens:1024,tools:[{type:'web_search_20250305',name:'web_search',max_uses:3}],messages:[{role:'user',content:q}]})});
+  if(res.getResponseCode()!==200){var e=new Error('Claude API '+res.getResponseCode()+': '+String(res.getContentText()).slice(0,160));e.fatal=(res.getResponseCode()===401||res.getResponseCode()===403||res.getResponseCode()===429);throw e;}
+  var j=JSON.parse(res.getContentText()),t=(j.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('\n');
+  return hargaJson_(t);
+}
+function hargaCariGoogle_(nama,sat,wil,P){
+  var u='https://www.googleapis.com/customsearch/v1?key='+encodeURIComponent(P.key)+'&cx='+encodeURIComponent(P.cx)+'&num=10&q='+encodeURIComponent(nama+' '+sat+' harga '+wil);
+  var res=UrlFetchApp.fetch(u,{muteHttpExceptions:true});
+  if(res.getResponseCode()!==200){var e=new Error('Google CSE '+res.getResponseCode()+': '+String(res.getContentText()).slice(0,160));e.fatal=(res.getResponseCode()===400||res.getResponseCode()===403||res.getResponseCode()===429);throw e;}
+  var it=(JSON.parse(res.getContentText()).items||[]),vals=[],src=[];
+  it.forEach(function(x){var p=hargaParseRp_((x.title||'')+' '+(x.snippet||''));if(p.length){vals.push(p[0]);src.push(x.link);}});
+  var r=hargaRingkas_(vals);
+  return r&&r.n>=2?{harga:r.harga,n:r.n,sumber:src.slice(0,3),catatan:'dari cuplikan hasil pencarian; CEK SATUAN'}:{harga:null,n:vals.length,sumber:[],catatan:'harga tidak cukup jelas di hasil pencarian'};
+}
+function hargaProp_(){
+  var P=PropertiesService.getScriptProperties();
+  return {prov:P.getProperty('HARGA_PROVIDER'),key:P.getProperty('HARGA_API_KEY'),cx:P.getProperty('HARGA_CSE_CX'),model:P.getProperty('HARGA_MODEL')||'claude-haiku-5-5'};
+}
+function hargaSync_(maks){
+  var sh=SpreadsheetApp.getActive().getSheetByName(MT.SH),P=hargaProp_(),R0=MT.R0,n=MT.RN-R0+1;
+  if(!sh)throw new Error('Sheet MATERIAL belum ada. Jalankan "Perbarui BOBOT PEK + AHS + MATERIAL".');
+  if(!P.prov||!P.key||(P.prov==='GOOGLE'&&!P.cx))throw new Error('Koneksi harga belum diatur: menu Material > Atur koneksi harga online.');
+  var v=sh.getRange(R0,1,n,9).getValues(),wil=String(sh.getRange(3,3).getValue()||'Indonesia'),T=[],i;
+  for(i=0;i<n;i++)if(String(v[i][0]).trim()!==''&&String(v[i][1]).trim()!==''&&String(v[i][4]).trim().toUpperCase()==='YA')T.push({r:R0+i,nama:String(v[i][0]).trim(),sat:String(v[i][1]).trim(),t:v[i][7]instanceof Date?v[i][7].getTime():0});
+  T.sort(function(a,b){return a.t-b.t;});
+  var run=T.slice(0,maks||10),out={dicek:0,ketemu:0,gagal:0,sisa:T.length-run.length,galat:''},now=new Date();
+  for(i=0;i<run.length;i++){
+    var x=run[i],res;
+    try{res=P.prov==='GOOGLE'?hargaCariGoogle_(x.nama,x.sat,wil,P):hargaCariClaude_(x.nama,x.sat,wil,P);}
+    catch(e){out.gagal++;sh.getRange(x.r,9).setValue('ERROR: '+e.message);if(e.fatal){out.galat=e.message;out.sisa+=run.length-i-1;break;}continue;}
+    out.dicek++;
+    sh.getRange(x.r,8).setValue(now);
+    if(res.harga){out.ketemu++;sh.getRange(x.r,6).setValue(res.harga);sh.getRange(x.r,9).setValue(res.n+' sumber: '+res.sumber.join(' | ')+(res.catatan?' | '+res.catatan:''));}
+    else{sh.getRange(x.r,6).setValue('');sh.getRange(x.r,9).setValue('TIDAK DITEMUKAN: '+res.catatan);}
+  }
+  return out;
+}
+function hargaDaftarUsulan_(){
+  var sh=SpreadsheetApp.getActive().getSheetByName(MT.SH),n=MT.RN-MT.R0+1,out=[],i;
+  if(!sh)return out;
+  var v=sh.getRange(MT.R0,1,n,6).getValues();
+  for(i=0;i<n;i++){
+    var c=Number(v[i][2])||0,f=v[i][5];
+    if(String(v[i][0]).trim()!==''&&typeof f==='number'&&f>0&&Math.abs(f-c)>0.5)out.push({r:MT.R0+i,nama:String(v[i][0]),sat:String(v[i][1]),lama:c,baru:f});
+  }
+  return out;
+}
+function hargaTerapkan_(){
+  var sh=SpreadsheetApp.getActive().getSheetByName(MT.SH),L=hargaDaftarUsulan_(),now=new Date();
+  L.forEach(function(x){sh.getRange(x.r,3).setValue(x.baru);sh.getRange(x.r,4).setValue(now);sh.getRange(x.r,6).setValue('');});
+  return L.length;
 }
 
 /* ====================== MENU (dipanggil pengguna) ====================== */
 function tarifUpgrade(){
   var ui=SpreadsheetApp.getUi();
-  if(bpAktif_()){ui.alert('Sudah memakai sheet BOBOT PEK. Sheet diperiksa/diperbaiki ulang (upah yang sudah diisi tidak diubah).');}
-  else if(ui.alert('Upgrade ke BOBOT PEK','Upah pelaksana yang tampil sekarang disalin ke sheet BOBOT PEK, lalu NILAI PROGRES membaca dari sana. Kondisi lama diarsipkan (bisa ROLLBACK). Total upah dicek sebelum dan sesudah; bila beda otomatis dibatalkan. Lanjut?',ui.ButtonSet.YES_NO)!==ui.Button.YES)return;
+  if(bpAktif_()){ui.alert('Sudah memakai sheet BOBOT PEK. BOBOT PEK, AHS dan MATERIAL diperiksa/dilengkapi ulang (upah, baris AHS dan harga material yang sudah diisi tidak diubah).');}
+  else if(ui.alert('Upgrade ke BOBOT PEK','Upah pelaksana yang tampil sekarang disalin ke sheet BOBOT PEK, lalu NILAI PROGRES membaca dari sana. Sheet AHS dan MATERIAL ikut dibuat. Kondisi lama diarsipkan (bisa ROLLBACK). Total upah dicek sebelum dan sesudah; bila beda otomatis dibatalkan. Lanjut?',ui.ButtonSet.YES_NO)!==ui.Button.YES)return;
   var r=bpKunci_(bpUpgrade_);
-  ui.alert(r.sudah?'Selesai (sheet diperiksa ulang).':'Upgrade berhasil: '+r.impor+' upah disalin. Total upah individual sama persis ('+r.total+'). Isi/ubah upah di sheet BOBOT PEK; lihat kolom CEK.');
+  ui.alert(r.sudah?'Selesai (sheet diperiksa ulang).':'Upgrade berhasil: '+r.impor+' upah disalin. Total upah individual sama persis ('+r.total+'). Isi/ubah upah di sheet BOBOT PEK; material di sheet MATERIAL dan AHS.');
 }
 function tarifKonfirmasi(){
   var ui=SpreadsheetApp.getUi(),L=bpDaftarBeda_();
@@ -546,25 +722,61 @@ function tarifKonfirmasi(){
 }
 function tarifRollback(){
   var ui=SpreadsheetApp.getUi();
-  if(ui.alert('ROLLBACK','Kembalikan rumus upah NILAI PROGRES ke kondisi sebelum upgrade (dari sheet '+BP.AR+'). Sheet BOBOT PEK tidak dihapus. Lanjut?',ui.ButtonSet.YES_NO)!==ui.Button.YES)return;
+  if(ui.alert('ROLLBACK','Kembalikan rumus upah NILAI PROGRES ke kondisi sebelum upgrade (dari sheet '+BP.AR+'). Sheet BOBOT PEK, AHS dan MATERIAL tidak dihapus. Lanjut?',ui.ButtonSet.YES_NO)!==ui.Button.YES)return;
   bpKunci_(bpRollback_);
   ui.alert('Rollback selesai.');
 }
+function tarifBersih(){
+  var ui=SpreadsheetApp.getUi();
+  if(ui.alert('Bersihkan sisa versi lama','HAPUS PERMANEN: sheet TARIF_PEKERJAAN, BACKUP_TARIF_*, ARSIP_UPGRADE_V3, kolom ID di RAB UPDATE (Q), judul lama di NILAI PROGRES (AW:AX), dan isi tabel TARIF lama di REKAP. Setelah ini ROLLBACK tidak bisa lagi. Lakukan hanya bila BOBOT PEK sudah dipakai dan hasilnya benar. Lanjut?',ui.ButtonSet.YES_NO)!==ui.Button.YES)return;
+  var o=bpKunci_(bpBersih_);
+  ui.alert(o.length?'Dibersihkan:\n- '+o.join('\n- '):'Tidak ada sisa lama yang perlu dibersihkan.');
+}
+function hargaAtur(){
+  var ui=SpreadsheetApp.getUi(),P=PropertiesService.getScriptProperties();
+  var a=ui.prompt('Atur koneksi harga online','Pilih mesin pencari:\n1 = Claude (pencarian web + ekstraksi harga, butuh API key Anthropic)\n2 = Google Programmable Search (butuh API key + ID mesin/cx)\nKetik 1 atau 2:',ui.ButtonSet.OK_CANCEL);
+  if(a.getSelectedButton()!==ui.Button.OK)return;
+  var p=String(a.getResponseText()).trim();
+  if(p!=='1'&&p!=='2'){ui.alert('Pilihan tidak dikenal. Tidak ada yang diubah.');return;}
+  var k=ui.prompt('API key','Tempel API key (disimpan di Script Properties, bukan di sheet):',ui.ButtonSet.OK_CANCEL);
+  if(k.getSelectedButton()!==ui.Button.OK||!String(k.getResponseText()).trim()){ui.alert('Dibatalkan. Tidak ada yang diubah.');return;}
+  P.setProperty('HARGA_PROVIDER',p==='1'?'CLAUDE':'GOOGLE');
+  P.setProperty('HARGA_API_KEY',String(k.getResponseText()).trim());
+  if(p==='2'){
+    var c=ui.prompt('ID mesin pencari (cx)','Tempel cx Programmable Search Engine:',ui.ButtonSet.OK_CANCEL);
+    if(c.getSelectedButton()!==ui.Button.OK||!String(c.getResponseText()).trim()){ui.alert('cx kosong. Koneksi Google belum lengkap.');return;}
+    P.setProperty('HARGA_CSE_CX',String(c.getResponseText()).trim());
+  }
+  ui.alert('Koneksi disimpan ('+(p==='1'?'Claude':'Google')+'). Isi YA di kolom "CARI ONLINE?" sheet MATERIAL, lalu menu Material > Sync harga online.');
+}
+function hargaSync(){
+  var ui=SpreadsheetApp.getUi();
+  if(ui.alert('Sync harga online','Mencari harga online untuk material bertanda YA (maks 10 per proses, yang paling lama belum dicek lebih dulu). Hasil masuk ke kolom USULAN; harga master TIDAK berubah sampai Anda memilih "Terapkan usulan harga". Lanjut?',ui.ButtonSet.YES_NO)!==ui.Button.YES)return;
+  var r=bpKunci_(function(){return hargaSync_(10);});
+  ui.alert('Selesai: '+r.dicek+' dicek, '+r.ketemu+' harga ditemukan, '+r.gagal+' gagal'+(r.sisa>0?', '+r.sisa+' belum diproses (jalankan lagi).':'.')+(r.galat?'\nBerhenti: '+r.galat:'')+'\nPeriksa kolom SUMBER dan SATUAN sebelum menerapkan.');
+}
+function hargaTerapkan(){
+  var ui=SpreadsheetApp.getUi(),L=hargaDaftarUsulan_();
+  if(!L.length){ui.alert('Tidak ada usulan harga yang berbeda dari harga master.');return;}
+  var t=L.slice(0,12).map(function(x){return x.nama+' ('+x.sat+'): '+Math.round(x.lama).toLocaleString('id-ID')+' -> '+Math.round(x.baru).toLocaleString('id-ID')+(x.lama>0?' ('+(x.baru/x.lama>=1?'+':'')+((x.baru/x.lama-1)*100).toFixed(1)+'%)':'');}).join('\n');
+  if(ui.alert('Terapkan usulan harga',L.length+' harga akan diganti:\n'+t+(L.length>12?'\n...':'')+'\n\nHapus dulu sel USULAN yang tidak ingin dipakai. Lanjut?',ui.ButtonSet.YES_NO)!==ui.Button.YES)return;
+  var n=bpKunci_(hargaTerapkan_);ui.alert(n+' harga diterapkan. AHS dan RAP ikut berubah otomatis.');
+}
 
 /* ====================== FUNGSI LAMA YANG DIGANTI ====================== */
-/* GANTI onEdit lama dengan ini. Perilaku lama (tabel TARIF) tetap berjalan selama BOBOT PEK belum dipakai. */
+/* GANTI onEdit lama dengan ini. */
 function onEdit(e){
   try{
     if(!e||!e.range)return;
     var sh=e.range.getSheet(),nm=sh.getName(),r1=e.range.getRow(),r2=e.range.getLastRow(),c1=e.range.getColumn(),c2=e.range.getLastColumn();
     if(nm===BP.SH){bpStempel_(sh,r1,r2,c1,c2);return;}
-    if(nm!=='REKAP PELAKSANA (Rp)')return;
-    if(bpAktif_()){bpRekapEdit_(sh,r1,r2,c1,c2);return;}
-    if(!CFG.NSAT||c1>8||c2<8)return;
-    tarifDariDetail_(sh,r1,r2);
-  }catch(x){SpreadsheetApp.getActive().toast('Sinkron tarif gagal: '+x.message,'Tarif',10);}
+    if(nm===MT.SH){matStempel_(sh,r1,r2,c1,c2);return;}
+    if(nm!=='REKAP PELAKSANA (Rp)'||c1>8||c2<8)return;
+    if(bpAktif_())bpRekapEdit_(sh,r1,r2,c1,c2);
+    else SpreadsheetApp.getActive().toast('Upah satuan kini diisi di sheet BOBOT PEK. Jalankan menu Tarif > Upgrade / perbarui dulu.','Upah',10);
+  }catch(x){SpreadsheetApp.getActive().toast('Gagal: '+x.message,'Upah',10);}
 }
-/* GANTI onOpen lama dengan ini (menu Sinkron tetap, ditambah menu Tarif). */
+/* GANTI onOpen lama dengan ini (menu Sinkron tetap; ditambah menu Tarif dan Material). */
 function onOpen(){
   var ui=SpreadsheetApp.getUi();
   ui.createMenu('Sinkron')
@@ -577,8 +789,14 @@ function onOpen(){
     .addToUi();
   ui.createMenu('Tarif')
     .addItem('Konfirmasi upah sesuai nama sekarang','tarifKonfirmasi')
+    .addItem('Upgrade / perbarui BOBOT PEK + AHS + MATERIAL (aman diulang)','tarifUpgrade')
     .addSeparator()
-    .addItem('Upgrade file lama ke BOBOT PEK (sekali)','tarifUpgrade')
+    .addItem('Bersihkan sisa versi lama (hapus permanen)','tarifBersih')
     .addItem('ROLLBACK upgrade','tarifRollback')
+    .addToUi();
+  ui.createMenu('Material')
+    .addItem('Sync harga online','hargaSync')
+    .addItem('Terapkan usulan harga','hargaTerapkan')
+    .addItem('Atur koneksi harga online','hargaAtur')
     .addToUi();
 }
