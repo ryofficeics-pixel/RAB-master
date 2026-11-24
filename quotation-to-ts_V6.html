@@ -342,12 +342,12 @@ async function makeXlsx(m) {
           r = sr + 1;
         });
         if (priced) {
-          const sm = c => (pre || []).concat(subs).map(x => cl(c) + x).join('+'),
+          const sm = c => (pre || []).concat(subs.filter((_, i) => MSEC[i][0] !== 'D')).map(x => cl(c) + x).join('+'),
             tl = (rr, t, f, o = {}) => {
               put(ws, cl(M.ur) + rr, t, {font: {bold: true, size: 9}});
               put(ws, cl(M.tT) + rr, {formula: f}, {fmt: '#,##0;[Red]-#,##0', bd: 1, font: {bold: true}, al: {horizontal: 'right'}, ...o});
             };
-          tl(r, 'TOTAL PEKERJAAN TAMBAH (T) (Rp) - termasuk seksi D (dikerjakan tapi tidak ditagihkan)', sm(M.tT));
+          tl(r, 'TOTAL PEKERJAAN TAMBAH (T) (Rp) - seksi C + E (seksi D tidak dihitung)', sm(M.tT));
           tl(r + 1, 'TOTAL PEKERJAAN KURANG (K) (Rp)', sm(M.tK));
           tl(r + 2, 'SELISIH (TAMBAH - KURANG) (Rp)', `${cl(M.tT)}${r}-${cl(M.tT)}${r + 1}`, {fill: 'FFFF00'});
           r += 3;
@@ -3799,18 +3799,18 @@ var AHSP_SEMARANG=[["BATU KALI Bulat Utuh","m3",159500.0],["Batu Belah","m3",198
       );
       lbl(AW + 9, 'Perubahan harga / spek');
       val(AW + 9, `SUMPRODUCT((${NPs}S8:S${lastR}<>"BATAL")*${NPs}C8:C${lastR}*(${NPs}E8:E${lastR}-${RBr('G')}))`, {fmt: nf1});
-      const sbD = S0m + (mCnt(0) + 2) + mCnt(1) + 1,
-        nTD = `(N(${cl2(MA.tT)}${sbD})-N(${cl2(MA.tK)}${sbD}))`;
-      lbl(AW + 11, 'Dikerjakan tapi tidak ditagihkan (seksi D, di luar RAB)');
-      val(AW + 11, nTD, {fmt: nf1});
-      lbl(AW + 12, 'TOTAL PEKERJAAN TAMBAH (ditambah + dikerjakan tidak ditagihkan)', 1);
+      const sbC = S0m + mCnt(0) + 1,
+        nTC = `(N(${cl2(MA.tT)}${sbC})-N(${cl2(MA.tK)}${sbC}))`;
+      lbl(AW + 11, 'Pekerjaan tambah di luar RAB - sudah dikerjakan (seksi C)');
+      val(AW + 11, nTC, {fmt: nf1});
+      lbl(AW + 12, 'TOTAL PEKERJAAN TAMBAH (ditambah + di luar RAB sudah dikerjakan)', 1);
       val(AW + 12, `D${AW + 2}+D${AW + 11}`, {fmt: nf1, font: {bold: true}, fill: 'FFFF00'});
       lbl(AW + 10, 'Overhead / pembulatan (sisa)');
       val(AW + 10, `D${EF}-D${AW}-SUM(D${AW + 6}:D${AW + 9})`, {fmt: nf1});
       put(
         cg,
         'C' + (TK + 11),
-        'Selisih kontrak termasuk overhead dan pembulatan sesuai quotation; diskon tetap seperti quotation awal. Rekap manual (seksi C-E) hanya catatan dan tidak mengubah kontrak efektif; nilai seksi D (dikerjakan tapi tidak ditagihkan) dimasukkan ke TOTAL PEKERJAAN TAMBAH. Dasar penyusunan addendum / pengajuan ke owner.',
+        'Selisih kontrak termasuk overhead dan pembulatan sesuai quotation; diskon tetap seperti quotation awal. Rekap manual (seksi C-E) hanya catatan dan tidak mengubah kontrak efektif; nilai seksi C (di luar RAB, sudah dikerjakan) dimasukkan ke TOTAL PEKERJAAN TAMBAH pada ringkasan. Dasar penyusunan addendum / pengajuan ke owner.',
         {font: {italic: true, size: 7}}
       );
       [
